@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neural Net Playground // darkOes</title>
+<meta name="description" content="Watch a small neural network learn in real time. Backpropagation written from scratch in vanilla JS.">
+<meta name="theme-color" content="#05080c">
+<style>
+  :root{--bg:#05080c;--panel:#0b1118;--line:#1d2a36;--fg:#c9d1d9;--w:#e6edf3;--y:#FCEE0A;--c:#00F0FF;--r:#FF2A6D;--g:#39FF14;--m:#6b7a86}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 'JetBrains Mono','Fira Code',Consolas,'Courier New',monospace}
+  body{min-height:100vh;background:radial-gradient(ellipse at 50% 0%,rgba(57,255,20,.05),transparent 60%),var(--bg)}
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px);z-index:50}
+  a{color:var(--c)}
+  header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);font-size:12px}
+  header a{text-decoration:none} header .brand{color:var(--y);letter-spacing:2px}
+  main{max-width:1160px;margin:0 auto;padding:22px 16px 40px}
+  h1{margin:0;color:var(--y);font-size:clamp(22px,4.5vw,38px);letter-spacing:2px;text-shadow:0 0 14px rgba(252,238,10,.45)}
+  .sub{color:var(--c);letter-spacing:3px;font-size:12px;margin:4px 0 18px}
+  .layout{display:grid;grid-template-columns:250px minmax(0,1fr) 300px;gap:16px}
+  @media (max-width:1000px){.layout{grid-template-columns:1fr 1fr}.layout .net{grid-column:1/-1;order:3}}
+  @media (max-width:640px){.layout{grid-template-columns:1fr}}
+  .panel{border:1px solid var(--line);background:var(--panel)}
+  .panel h2{margin:0;padding:7px 12px;font-size:12px;letter-spacing:2px;color:#000;background:var(--y)}
+  .panel.c h2{background:var(--c)}
+  .panel .body{padding:12px}
+  label{display:block;font-size:12px;color:var(--m);margin:10px 0 4px;letter-spacing:1px}
+  label:first-child{margin-top:0}
+  select,button{font:inherit;background:transparent;color:var(--y);border:1px solid var(--y);padding:6px 10px;cursor:pointer;width:100%}
+  select option{background:#000}
+  button:hover{background:var(--y);color:#000}
+  input[type=range]{width:100%;accent-color:var(--y)}
+  .row{display:flex;gap:6px}
+  .row button{flex:1}
+  .datasets{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .datasets button{padding:0;aspect-ratio:1;border-color:#2b3946;overflow:hidden}
+  .datasets button.on{border-color:var(--y);box-shadow:0 0 10px rgba(252,238,10,.4)}
+  .datasets canvas{width:100%;height:100%;display:block}
+  #plot{width:100%;aspect-ratio:1;display:block;cursor:crosshair;background:#000}
+  .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;text-align:center}
+  .stats div{border:1px solid var(--line);padding:6px 2px}
+  .stats small{display:block;color:var(--m);font-size:10px;letter-spacing:1px}
+  .stats b{font-weight:400;color:var(--y);font-size:16px}
+  #loss{width:100%;height:90px;display:block;margin-top:10px;background:#03060a}
+  #net{width:100%;height:330px;display:block}
+  .hint{font-size:12px;color:var(--m);margin-top:8px}
+  .legend{display:flex;justify-content:space-between;font-size:11px;color:var(--m);margin-top:6px}
+  .legend span::before{content:"";display:inline-block;width:10px;height:10px;margin-right:5px;vertical-align:-1px}
+  .legend .a::before{background:var(--y)} .legend .b::before{background:var(--c)}
+  footer{text-align:center;color:var(--m);font-size:12px;padding:20px}
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="https://darkoes.github.io/">← darkOes.exe</a>
+  <a href="https://github.com/darkOes/neural-net-playground">source code ↗</a>
+</header>
+<main>
+  <h1>NEURAL_NET_PLAYGROUND</h1>
+  <div class="sub">// WATCH A NEURAL NETWORK LEARN, LIVE. BACKPROP FROM SCRATCH.</div>
+
+  <div class="layout">
+    <section class="panel">
+      <h2>CONFIG</h2>
+      <div class="body">
+        <label>DATASET</label>
+        <div class="datasets" id="datasets"></div>
+        <label for="layers">HIDDEN LAYERS</label>
+        <select id="layers"><option value="4">1 × 4</option><option value="8">1 × 8</option><option value="6,6">2 × 6</option><option value="8,8" selected>2 × 8</option><option value="8,8,8">3 × 8</option></select>
+        <label for="act">ACTIVATION</label>
+        <select id="act"><option value="tanh" selected>tanh</option><option value="relu">ReLU</option><option value="sigmoid">sigmoid</option></select>
+        <label for="lr">LEARNING RATE <span id="lrV" style="color:var(--y)">0.03</span></label>
+        <input id="lr" type="range" min="0" max="6" step="1" value="3">
+        <label for="noise">NOISE <span id="noiseV" style="color:var(--y)">10%</span></label>
+        <input id="noise" type="range" min="0" max="50" step="5" value="10">
+        <label>CONTROL</label>
+        <div class="row"><button id="play">PAUSE</button><button id="reset">RESET</button></div>
+        <p class="hint">Click the plot to add yellow points, shift+click (or right-click) for cyan.</p>
+      </div>
+    </section>
+
+    <section class="panel c">
+      <h2>DECISION BOUNDARY</h2>
+      <div class="body">
+        <canvas id="plot" width="400" height="400"></canvas>
+        <div class="legend"><span class="a">class A</span><span class="b">class B</span></div>
+        <div class="stats">
+          <div><small>EPOCH</small><b id="ep">0</b></div>
+          <div><small>LOSS</small><b id="ls">—</b></div>
+          <div><small>ACCURACY</small><b id="acc">—</b></div>
+        </div>
+        <canvas id="loss" width="400" height="90"></canvas>
+      </div>
+    </section>
+
+    <section class="panel net">
+      <h2>NETWORK</h2>
+      <div class="body">
+        <canvas id="net" width="300" height="330"></canvas>
+        <p class="hint">Line color = weight sign (yellow +, cyan −), thickness = magnitude. Neuron glow = activation for the point under your cursor.</p>
+      </div>
+    </section>
+  </div>
+</main>
+<footer>built by <a href="https://github.com/darkOes">darkOes</a> // no ML libraries — matrix math, backprop and Adam in ~150 lines // never fade away 🌙</footer>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const LRS = [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1];
+  const YEL = [252, 238, 10], CYA = [0, 240, 255];
+
+  // ---------- data ----------
+  function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  const GEN = {
+    circle: (n, k) => Array.from({length: n}, (_, i) => {
+      const lab = i % 2, r = lab ? Math.random() * 0.45 : 0.65 + Math.random() * 0.3, a = Math.random() * Math.PI * 2;
+      return [r * Math.cos(a) + gauss() * k, r * Math.sin(a) + gauss() * k, lab];
+    }),
+    xor: (n, k) => Array.from({length: n}, () => {
+      const x = Math.random() * 2 - 1, y = Math.random() * 2 - 1;
+      const px = x + (x > 0 ? 0.05 : -0.05), py = y + (y > 0 ? 0.05 : -0.05);
+      return [px + gauss() * k, py + gauss() * k, px * py > 0 ? 1 : 0];
+    }),
+    spiral: (n, k) => Array.from({length: n}, (_, i) => {
+      const lab = i % 2, t = (i / 2) / (n / 2) * 1.75 * Math.PI, r = t / (1.9 * Math.PI) * 0.95;
+      const a = t + lab * Math.PI;
+      return [r * Math.sin(a) + gauss() * k * 0.6, r * Math.cos(a) + gauss() * k * 0.6, lab];
+    }),
+    blobs: (n, k) => Array.from({length: n}, (_, i) => {
+      const lab = i % 2, c = lab ? [0.45, 0.45] : [-0.45, -0.45];
+      return [c[0] + gauss() * (0.18 + k), c[1] + gauss() * (0.18 + k), lab];
+    }),
+  };
+
+  // ---------- network ----------
+  const ACT = {
+    tanh: {f: Math.tanh, d: y => 1 - y * y},
+    relu: {f: x => x > 0 ? x : 0.01 * x, d: y => y > 0 ? 1 : 0.01},
+    sigmoid: {f: x => 1 / (1 + Math.exp(-x)), d: y => y * (1 - y)},
+  };
+  function Net(sizes, act) {
+    const L = sizes.length - 1;
+    const W = [], B = [], mW = [], vW = [], mB = [], vB = [];
+    for (let l = 0; l < L; l++) {
+      const nin = sizes[l], nout = sizes[l + 1], s = Math.sqrt(2 / (nin + nout));
+      W.push(Array.from({length: nout}, () => Array.from({length: nin}, () => gauss() * s)));
+      B.push(new Array(nout).fill(0));
+      mW.push(W[l].map(r => r.map(() => 0))); vW.push(W[l].map(r => r.map(() => 0)));
+      mB.push(new Array(nout).fill(0)); vB.push(new Array(nout).fill(0));
+    }
+    let t = 0;
+    function forward(x) {
+      const A = [x];
+      for (let l = 0; l < L; l++) {
+        const last = l === L - 1, out = [];
+        for (let j = 0; j < W[l].length; j++) {
+          let z = B[l][j]; const w = W[l][j], a = A[l];
+          for (let i = 0; i < w.length; i++) z += w[i] * a[i];
+          out.push(last ? 1 / (1 + Math.exp(-z)) : ACT[act].f(z));
+        }
+        A.push(out);
+      }
+      return A;
+    }
+    function trainBatch(batch, lr) {
+      const gW = W.map(m => m.map(r => r.map(() => 0))), gB = B.map(b => b.map(() => 0));
+      let loss = 0;
+      for (const [x, y, lab] of batch) {
+        const A = forward([x, y]);
+        const p = Math.min(Math.max(A[L][0], 1e-7), 1 - 1e-7);
+        loss += -(lab * Math.log(p) + (1 - lab) * Math.log(1 - p));
+        let delta = [A[L][0] - lab]; // sigmoid + cross-entropy
+        for (let l = L - 1; l >= 0; l--) {
+          const prev = A[l];
+          for (let j = 0; j < W[l].length; j++) {
+            gB[l][j] += delta[j];
+            for (let i = 0; i < prev.length; i++) gW[l][j][i] += delta[j] * prev[i];
+          }
+          if (l > 0) {
+            const nd = new Array(prev.length).fill(0);
+            for (let i = 0; i < prev.length; i++) {
+              let s = 0; for (let j = 0; j < W[l].length; j++) s += W[l][j][i] * delta[j];
+              nd[i] = s * ACT[act].d(prev[i]);
+            }
+            delta = nd;
+          }
+        }
+      }
+      // Adam
+      t++; const b1 = 0.9, b2 = 0.999, eps = 1e-8, n = batch.length;
+      const c1 = 1 - Math.pow(b1, t), c2 = 1 - Math.pow(b2, t);
+      for (let l = 0; l < L; l++) for (let j = 0; j < W[l].length; j++) {
+        for (let i = 0; i < W[l][j].length; i++) {
+          const g = gW[l][j][i] / n;
+          mW[l][j][i] = b1 * mW[l][j][i] + (1 - b1) * g; vW[l][j][i] = b2 * vW[l][j][i] + (1 - b2) * g * g;
+          W[l][j][i] -= lr * (mW[l][j][i] / c1) / (Math.sqrt(vW[l][j][i] / c2) + eps);
+        }
+        const g = gB[l][j] / n;
+        mB[l][j] = b1 * mB[l][j] + (1 - b1) * g; vB[l][j] = b2 * vB[l][j] + (1 - b2) * g * g;
+        B[l][j] -= lr * (mB[l][j] / c1) / (Math.sqrt(vB[l][j] / c2) + eps);
+      }
+      return loss / n;
+    }
+    return {sizes, W, forward, trainBatch};
+  }
+
+  // ---------- state ----------
+  let dataset = 'spiral', data = [], net, epoch = 0, running = true, lossHist = [], hover = null, ema = null;
+  function build() {
+    const hidden = $('layers').value.split(',').map(Number);
+    net = Net([2, ...hidden, 1], $('act').value);
+    epoch = 0; lossHist = []; ema = null;
+  }
+  function regen() { data = GEN[dataset](300, +$('noise').value / 100 * 0.5); build(); }
+
+  // ---------- drawing ----------
+  const plot = $('plot'), pc = plot.getContext('2d');
+  const RES = 50;
+  const img = pc.createImageData(RES, RES);
+  const off = document.createElement('canvas'); off.width = off.height = RES;
+  const toPx = v => (v + 1.2) / 2.4 * plot.width;
+  const fromPx = p => p / plot.width * 2.4 - 1.2;
+
+  function drawPlot() {
+    for (let py = 0; py < RES; py++) for (let px = 0; px < RES; px++) {
+      const x = (px + 0.5) / RES * 2.4 - 1.2, y = 1.2 - (py + 0.5) / RES * 2.4;
+      const p = net.forward([x, y]).at(-1)[0];
+      const k = Math.abs(p - 0.5) * 2;
+      const col = p > 0.5 ? YEL : CYA, i = (py * RES + px) * 4;
+      img.data[i] = col[0] * k * 0.55; img.data[i + 1] = col[1] * k * 0.55; img.data[i + 2] = col[2] * k * 0.55; img.data[i + 3] = 255;
+    }
+    off.getContext('2d').putImageData(img, 0, 0);
+    pc.imageSmoothingEnabled = true;
+    pc.drawImage(off, 0, 0, plot.width, plot.height);
+    // axes
+    pc.strokeStyle = 'rgba(255,255,255,.08)'; pc.beginPath();
+    pc.moveTo(toPx(0), 0); pc.lineTo(toPx(0), plot.height); pc.moveTo(0, toPx(0)); pc.lineTo(plot.width, toPx(0)); pc.stroke();
+    for (const [x, y, lab] of data) {
+      pc.beginPath(); pc.arc(toPx(x), plot.height - toPx(y), 3.2, 0, Math.PI * 2);
+      pc.fillStyle = lab ? '#FCEE0A' : '#00F0FF'; pc.fill();
+      pc.lineWidth = 1; pc.strokeStyle = '#000'; pc.stroke();
+    }
+  }
+
+  const lc = $('loss').getContext('2d');
+  function drawLoss() {
+    const w = lc.canvas.width, h = lc.canvas.height;
+    lc.clearRect(0, 0, w, h);
+    if (lossHist.length < 2) return;
+    const max = Math.max(...lossHist, 0.01);
+    lc.strokeStyle = '#39FF14'; lc.lineWidth = 1.5; lc.beginPath();
+    lossHist.forEach((v, i) => { const x = i / (lossHist.length - 1) * w, y = h - 4 - v / max * (h - 10); i ? lc.lineTo(x, y) : lc.moveTo(x, y); });
+    lc.stroke();
+    lc.fillStyle = '#6b7a86'; lc.font = '10px monospace'; lc.fillText('loss', 4, 12);
+  }
+
+  const nc = $('net').getContext('2d');
+  function drawNet() {
+    const w = nc.canvas.width, h = nc.canvas.height, sizes = net.sizes;
+    nc.clearRect(0, 0, w, h);
+    const A = net.forward(hover || [0, 0]);
+    const pos = sizes.map((n, l) => Array.from({length: n}, (_, j) => [24 + l * (w - 48) / (sizes.length - 1), h / 2 + (j - (n - 1) / 2) * Math.min(34, (h - 30) / n)]));
+    let maxW = 0; net.W.forEach(m => m.forEach(r => r.forEach(v => { maxW = Math.max(maxW, Math.abs(v)); })));
+    net.W.forEach((m, l) => m.forEach((r, j) => r.forEach((v, i) => {
+      const [x1, y1] = pos[l][i], [x2, y2] = pos[l + 1][j];
+      nc.strokeStyle = v > 0 ? `rgba(252,238,10,${0.15 + 0.7 * Math.abs(v) / maxW})` : `rgba(0,240,255,${0.15 + 0.7 * Math.abs(v) / maxW})`;
+      nc.lineWidth = 0.5 + 3 * Math.abs(v) / maxW;
+      nc.beginPath(); nc.moveTo(x1, y1); nc.lineTo(x2, y2); nc.stroke();
+    })));
+    pos.forEach((layer, l) => layer.forEach(([x, y], j) => {
+      const a = A[l][j], s = l === sizes.length - 1 ? a * 2 - 1 : Math.tanh(a);
+      nc.beginPath(); nc.arc(x, y, 8, 0, Math.PI * 2);
+      nc.fillStyle = '#05080c'; nc.fill();
+      nc.lineWidth = 2; nc.strokeStyle = s > 0 ? '#FCEE0A' : '#00F0FF';
+      nc.shadowColor = nc.strokeStyle; nc.shadowBlur = 12 * Math.abs(s); nc.stroke(); nc.shadowBlur = 0;
+    }));
+    nc.fillStyle = '#6b7a86'; nc.font = '10px monospace';
+    nc.fillText('x, y', 6, h - 6); nc.fillText('out', w - 28, h - 6);
+  }
+
+  function accuracy() {
+    let ok = 0; for (const [x, y, lab] of data) if ((net.forward([x, y]).at(-1)[0] > 0.5) === !!lab) ok++;
+    return data.length ? ok / data.length : 0;
+  }
+
+  // ---------- loop ----------
+  let frame = 0;
+  function loop() {
+    if (running && data.length) {
+      const lr = LRS[+$('lr').value];
+      let loss = 0;
+      for (let k = 0; k < 5; k++) {
+        const batch = [];
+        for (let i = 0; i < 32; i++) batch.push(data[(Math.random() * data.length) | 0]);
+        loss = net.trainBatch(batch, lr);
+      }
+      epoch += 5;
+      ema = ema == null ? loss : ema * 0.95 + loss * 0.05;
+      if (frame % 3 === 0) { lossHist.push(ema); if (lossHist.length > 200) lossHist.shift(); }
+      $('ep').textContent = epoch; $('ls').textContent = ema.toFixed(3);
+    }
+    if (frame % 2 === 0) { drawPlot(); drawNet(); drawLoss(); $('acc').textContent = data.length ? (accuracy() * 100).toFixed(0) + '%' : '—'; }
+    frame++;
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- UI ----------
+  Object.keys(GEN).forEach(name => {
+    const b = document.createElement('button'); b.title = name; b.setAttribute('aria-label', name);
+    const c = document.createElement('canvas'); c.width = c.height = 60; b.appendChild(c);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 60, 60);
+    for (const [x, y, lab] of GEN[name](120, 0.03)) { ctx.fillStyle = lab ? '#FCEE0A' : '#00F0FF'; ctx.fillRect((x + 1.2) / 2.4 * 60, 60 - (y + 1.2) / 2.4 * 60, 2, 2); }
+    b.onclick = () => { dataset = name; document.querySelectorAll('.datasets button').forEach(x => x.classList.toggle('on', x === b)); regen(); };
+    if (name === dataset) b.classList.add('on');
+    $('datasets').appendChild(b);
+  });
+  $('layers').onchange = build; $('act').onchange = build;
+  $('lr').oninput = () => { $('lrV').textContent = LRS[+$('lr').value]; };
+  $('noise').oninput = () => { $('noiseV').textContent = $('noise').value + '%'; };
+  $('noise').onchange = regen;
+  $('play').onclick = () => { running = !running; $('play').textContent = running ? 'PAUSE' : 'PLAY'; };
+  $('reset').onclick = build;
+  function pt(e) { const r = plot.getBoundingClientRect(); return [fromPx((e.clientX - r.left) / r.width * plot.width), -fromPx((e.clientY - r.top) / r.height * plot.height)]; }
+  plot.addEventListener('click', e => { const [x, y] = pt(e); data.push([x, y, e.shiftKey ? 0 : 1]); });
+  plot.addEventListener('contextmenu', e => { e.preventDefault(); const [x, y] = pt(e); data.push([x, y, 0]); });
+  plot.addEventListener('mousemove', e => { hover = pt(e); });
+  plot.addEventListener('mouseleave', () => { hover = null; });
+
+  regen();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
